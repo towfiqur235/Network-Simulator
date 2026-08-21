@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inside the Wire — OSI &amp; TCP/IP Network Simulator</title>
+  <link rel="stylesheet" href="src/css/styles.css" />
+</head>
+<body data-theme="light">
+
+<div class="navbar">
+  <div class="nav-left">
+    <div class="nav-logo">🛰️</div>
+    <div>
+      <div class="nav-title">Inside the Wire</div>
+      <div class="nav-sub">Packet-level OSI &amp; TCP/IP simulator</div>
+    </div>
+  </div>
+  <div class="nav-center">
+    <div class="pill-toggle" id="modelToggle">
+      <button data-val="OSI" class="active">OSI · 7 Layers</button>
+      <button data-val="TCPIP">TCP/IP · 5 Layers</button>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="icon-btn" id="themeBtn" title="Toggle dark mode">🌙</button>
+  </div>
+</div>
+
+<div class="tabbar-wrap">
+  <div class="tabbar" id="mainTabs">
+    <button data-val="home" class="active">🏠 Home</button>
+    <button data-val="demo">🧪 Demo Simulation</button>
+    <button data-val="builder">🗺️ Topology Builder</button>
+    <button data-val="encoding">📶 Line Encoding Lab</button>
+    <button data-val="framing">🧩 Framing Lab</button>
+    <button data-val="errordetect">🛡️ Error Detection</button>
+    <button data-val="errorcorrect">🩹 Error Correction</button>
+    <button data-val="dashboard">📊 Performance Dashboard</button>
+    <button data-val="reports">📄 Reports</button>
+    <button data-val="help">❓ Help</button>
+  </div>
+</div>
+
+<div class="page">
+
+<div class="hero-strip hidden" id="heroStrip">
+  <div>
+    <div class="hero-title" id="heroTitle">Demo Simulation</div>
+    <div class="hero-sub" id="heroSub">A fixed two-PC network so you can see every layer, hop and bit without building anything first.</div>
+  </div>
+  <div class="badge-row" id="statusChips">
+    <div class="chip"><span class="dot"></span>Model: <b id="chipModel" style="color:var(--text)">OSI</b></div>
+    <div class="chip">Transport: <b id="chipTransport" style="color:var(--text)">TCP</b></div>
+  </div>
+</div>
+
+<!-- =================== DEMO VIEW =================== -->
+<div id="viewDemo" class="hidden">
+  <div class="card card-pad config-panel">
+    <div class="field">
+      <label>Message</label>
+      <input type="text" id="msgInput" value="Hi! This is Rasel." maxlength="40">
+    </div>
+    <div class="field">
+      <label>App Protocol</label>
+      <select id="protoSelect"><option>HTTP</option><option>HTTPS</option><option>FTP</option><option>SMTP</option><option>DNS</option></select>
+    </div>
+    <div class="field">
+      <label>Transport</label>
+      <select id="transportSelect"><option value="TCP">TCP</option><option value="UDP">UDP</option></select>
+    </div>
+    <div class="field">
+      <label>Line Code</label>
+      <select id="encodingSelect"><option>NRZ-L</option><option>NRZ-I</option><option>Manchester</option><option>AMI</option></select>
+    </div>
+    <div class="field">
+      <label>Medium</label>
+      <select id="mediumSelect">
+        <option value="copper">Copper (electrical)</option>
+        <option value="fiber">Fiber (light)</option>
+        <option value="wifi">Wi-Fi (radio)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Network Type</label>
+      <select id="netTypeSelect">
+        <option value="lan_small">Small LAN</option>
+        <option value="lan_office">Office LAN</option>
+        <option value="campus">Campus Network</option>
+        <option value="wan">WAN</option>
+        <option value="internet">Internet Simulation</option>
+      </select>
+    </div>
+    <button class="btn primary" id="sendBtn">▶ Send</button>
+  </div>
+
+  <div class="card topo-wrap">
+    <div class="card-title">Network Topology</div>
+    <svg id="topoSvg" viewBox="0 0 1000 150"></svg>
+    <div class="click-hint">click the packet to inspect it</div>
+  </div>
+
+  <div class="grid">
+    <div class="card card-pad">
+      <div class="card-title">Protocol Stack</div>
+      <div class="layer-rail" id="layerRail"></div>
+    </div>
+    <div class="card card-pad stage">
+      <div class="step-header">
+        <span class="step-badge" id="stepBadge">READY</span>
+        <span class="step-title" id="stepTitle">Type a message and hit Send</span>
+      </div>
+      <div class="step-desc" id="stepDesc">The simulator pauses at every layer and hop so you can see exactly what's happening to your data.</div>
+      <div class="visual-box" id="visualBox"></div>
+      <div class="card-title" style="margin-top:6px;">Activity Log</div>
+      <div class="log-list" id="logList"></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title">Packet Inspector</div>
+      <div id="inspector"><div class="insp-empty">Click the moving packet at any point in the simulation to see its full header stack in hex &amp; binary.</div></div>
+    </div>
+  </div>
+
+  <div class="card controls">
+    <div class="controls-top">
+      <button class="btn" id="btnReplay" title="Replay">⟲</button>
+      <button class="btn" id="btnBack" title="Step back">⏮</button>
+      <button class="btn primary" id="btnPlay" title="Play/Pause">▶ Play</button>
+      <button class="btn" id="btnFwd" title="Step forward">⏭</button>
+      <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-meta"><span id="stepCounter">Step 0 / 0</span><span id="speedLabel">1.0×</span></div>
+      </div>
+      <div class="speed-wrap">Speed<input type="range" id="speedSlider" min="0.25" max="5" step="0.25" value="1" style="width:110px;"></div>
+    </div>
+    <div class="sliders">
+      <div class="slider-field"><label>Packet Loss <b id="lossVal">10%</b></label><input type="range" id="lossSlider" min="0" max="60" value="10"></div>
+      <div class="slider-field"><label>Latency <b id="latVal">40ms</b></label><input type="range" id="latSlider" min="5" max="300" value="40"></div>
+      <div class="slider-field"><label>Bit Error Rate <b id="berVal">5%</b></label><input type="range" id="berSlider" min="0" max="40" value="5"></div>
+      <div class="slider-field"><label>Starting TTL <b id="ttlVal">64</b></label><input type="range" id="ttlSlider" min="1" max="64" value="64"></div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== BUILDER VIEW =================== -->
+<div id="viewBuilder" class="hidden">
+  <div class="builder-hint">💡 Drag devices onto the canvas, connect them, click a device to set it as Sender, another as Receiver, then Start Simulation. Click any cable to delete it; hover a device for a delete button.</div>
+
+  <div class="card card-pad" id="builderMsgPanel" style="margin-bottom:16px;">
+    <div class="card-title">Send Message</div>
+    <div class="field-row" style="align-items:flex-end; flex-wrap:wrap;">
+      <div class="field">
+        <label>From (Source)</label>
+        <div class="msg-endpoint" id="msgFromDisplay">Click 🟢 Set Sender, then pick a device</div>
+      </div>
+      <div class="field">
+        <label>To (Destination)</label>
+        <div class="msg-endpoint" id="msgToDisplay">Click 🔴 Set Receiver, then pick a device</div>
+      </div>
+      <div class="field" style="flex:2; min-width:220px;">
+        <label>Message</label>
+        <input type="text" id="msgInputB" value="Hello Server!" maxlength="40">
+      </div>
+      <div class="field">
+        <label>App Protocol</label>
+        <select id="protoSelectB"><option>HTTP</option><option>HTTPS</option><option>FTP</option><option>SMTP</option><option>DNS</option></select>
+      </div>
+      <div class="field">
+        <label>Line Code</label>
+        <select id="encodingSelectB"><option>NRZ-L</option><option>NRZ-I</option><option>Manchester</option><option>AMI</option></select>
+      </div>
+      <button class="btn primary" id="sendMsgBtnB" disabled>▶ Send Message</button>
+    </div>
+  </div>
+
+  <div class="card card-pad builder-toolbar">
+    <div class="tpl-row">
+      <span style="font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted2); font-weight:700; align-self:center; margin-right:2px;">Templates</span>
+      <button class="tpl-btn" data-tpl="star">⭐ Star</button>
+      <button class="tpl-btn" data-tpl="bus">📶 Bus</button>
+      <button class="tpl-btn" data-tpl="ring">⭕ Ring</button>
+      <button class="tpl-btn" data-tpl="mesh">🕸️ Mesh</button>
+      <button class="tpl-btn" data-tpl="tree">🌳 Tree</button>
+      <button class="tpl-btn" data-tpl="hybrid">🔀 Hybrid</button>
+    </div>
+    <div class="divider-v"></div>
+    <button class="btn sm" id="connectModeBtn">🔌 Connect Mode: Off</button>
+    <select id="linkTypeSelect" style="padding:8px 9px; font-size:12px;">
+      <option value="ethernet">Ethernet Cable</option>
+      <option value="fiber">Fiber Optic</option>
+      <option value="wireless">Wireless Link</option>
+    </select>
+    <div class="divider-v"></div>
+    <button class="btn sm" id="setSenderBtn">🟢 Set Sender</button>
+    <button class="btn sm" id="setReceiverBtn">🔴 Set Receiver</button>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);">
+      <input type="checkbox" id="failLinkChk"> Simulate link failure mid-transmission
+    </label>
+    <div class="divider-v"></div>
+    <button class="btn sm ghost" id="clearCanvasBtn">🗑 Clear</button>
+    <button class="btn primary" id="startBuilderSimBtn" style="margin-left:auto;" disabled>▶ Start Simulation</button>
+  </div>
+
+  <div class="builder-layout">
+    <div class="card card-pad palette">
+      <div class="card-title">Devices</div>
+      <div class="palette-item" draggable="true" data-type="pc">💻<span class="pi-icon"></span>Computer</div>
+      <div class="palette-item" draggable="true" data-type="laptop">💻<span class="pi-icon"></span>Laptop</div>
+      <div class="palette-item" draggable="true" data-type="server">🖥️<span class="pi-icon"></span>Server</div>
+      <div class="palette-item" draggable="true" data-type="router">📡<span class="pi-icon"></span>Router</div>
+      <div class="palette-item" draggable="true" data-type="switch">🔀<span class="pi-icon"></span>Switch</div>
+      <div class="palette-item" draggable="true" data-type="hub">🔘<span class="pi-icon"></span>Hub</div>
+      <div class="palette-item" draggable="true" data-type="ap">📶<span class="pi-icon"></span>Access Point</div>
+      <div class="palette-item" draggable="true" data-type="firewall">🧱<span class="pi-icon"></span>Firewall</div>
+      <div class="palette-item" draggable="true" data-type="cloud">☁️<span class="pi-icon"></span>Internet Cloud</div>
+      <div class="legend-row">
+        <span><i class="legend-swatch" style="background:var(--line)"></i>Ethernet</span>
+        <span><i class="legend-swatch" style="background:var(--line); background-image:repeating-linear-gradient(90deg,var(--muted) 0 4px, transparent 4px 7px)"></i>Wireless</span>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="card-title">Canvas <span id="canvasStatus" class="mono" style="color:var(--muted2); text-transform:none; font-weight:500;">0 devices · 0 links</span></div>
+      <div id="builderCanvas">
+        <svg id="edgeSvg"><g id="edgeGroup"></g></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid" id="builderSimGrid" style="margin-top:16px; display:none;">
+    <div class="card card-pad">
+      <div class="card-title">Protocol Stack</div>
+      <div class="layer-rail" id="layerRailB"></div>
+    </div>
+    <div class="card card-pad stage">
+      <div class="step-header">
+        <span class="step-badge" id="stepBadgeB">READY</span>
+        <span class="step-title" id="stepTitleB">—</span>
+      </div>
+      <div class="step-desc" id="stepDescB"></div>
+      <div class="visual-box" id="visualBoxB"></div>
+      <div class="card-title" style="margin-top:6px;">Activity Log</div>
+      <div class="log-list" id="logListB"></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title">Packet Inspector</div>
+      <div id="inspectorB"><div class="insp-empty">Click the moving packet to inspect its headers.</div></div>
+    </div>
+  </div>
+  <div class="card controls" id="builderControls" style="margin-top:16px; display:none;">
+    <div class="controls-top">
+      <button class="btn" id="btnReplayB" title="Replay">⟲</button>
+      <button class="btn" id="btnBackB" title="Step back">⏮</button>
+      <button class="btn primary" id="btnPlayB" title="Play/Pause">▶ Play</button>
+      <button class="btn" id="btnFwdB" title="Step forward">⏭</button>
+      <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-fill" id="progressFillB"></div></div>
+        <div class="progress-meta"><span id="stepCounterB">Step 0 / 0</span><span id="speedLabelB">1.0×</span></div>
+      </div>
+      <div class="speed-wrap">Speed<input type="range" id="speedSliderB" min="0.25" max="5" step="0.25" value="1" style="width:110px;"></div>
+    </div>
+    <div class="sliders">
+      <div class="slider-field"><label>Packet Loss <b id="lossValB">10%</b></label><input type="range" id="lossSliderB" min="0" max="60" value="10"></div>
+      <div class="slider-field"><label>Bit Error Rate <b id="berValB">5%</b></label><input type="range" id="berSliderB" min="0" max="40" value="5"></div>
+      <div class="slider-field"><label>Starting TTL <b id="ttlValB">64</b></label><input type="range" id="ttlSliderB" min="1" max="64" value="64"></div>
+      <div class="field">
+        <label>Transport</label>
+        <select id="transportSelectB"><option value="TCP">TCP</option><option value="UDP">UDP</option></select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== HOME VIEW =================== -->
+<div id="viewHome">
+  <div class="hero-panel">
+    <h1>Inside the Wire</h1>
+    <p>A packet-level OSI &amp; TCP/IP simulator — encapsulation, routing, line encoding, framing, error control and topology design, all in one place. Pick a lab below to get started.</p>
+    <button class="btn primary" onclick="switchTab('demo')">▶ Start Demo Simulation</button>
+    <button class="btn" onclick="switchTab('builder')">🗺️ Open Topology Builder</button>
+  </div>
+  <div class="feature-grid">
+    <div class="feature-card" onclick="switchTab('demo')"><div class="fc-icon">🧪</div><h3>Demo Simulation</h3><p>Watch a message travel through every OSI/TCP-IP layer on a fixed reference network.</p></div>
+    <div class="feature-card" onclick="switchTab('builder')"><div class="fc-icon">🗺️</div><h3>Topology Builder</h3><p>Drag devices onto a canvas, wire them up, and simulate across your own network design.</p></div>
+    <div class="feature-card" onclick="switchTab('encoding')"><div class="fc-icon">📶</div><h3>Line Encoding Lab</h3><p>12 encoding schemes with waveforms, theory, and a side-by-side comparison mode.</p></div>
+    <div class="feature-card" onclick="switchTab('framing')"><div class="fc-icon">🧩</div><h3>Framing Lab</h3><p>Byte stuffing and bit stuffing, animated step by step with de-stuffing at the receiver.</p></div>
+    <div class="feature-card" onclick="switchTab('errordetect')"><div class="fc-icon">🛡️</div><h3>Error Detection</h3><p>CRC generator-polynomial division, worked step by step, with error injection.</p></div>
+    <div class="feature-card" onclick="switchTab('errorcorrect')"><div class="fc-icon">🩹</div><h3>Error Correction</h3><p>Hamming(7,4) code: parity calculation, syndrome detection, and automatic bit correction.</p></div>
+    <div class="feature-card" onclick="switchTab('dashboard')"><div class="fc-icon">📊</div><h3>Performance Dashboard</h3><p>Live counters across every simulation you run: throughput, loss, retransmissions, RTT.</p></div>
+    <div class="feature-card" onclick="switchTab('reports')"><div class="fc-icon">📄</div><h3>Lab Reports</h3><p>Generate a printable lab report from your most recent simulation run.</p></div>
+  </div>
+</div>
+
+<!-- =================== LINE ENCODING LAB =================== -->
+<div id="viewEncoding" class="hidden">
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="field-row" style="align-items:flex-end;">
+      <div class="field"><label>Bit Stream</label><input type="text" id="encBits" value="1101 0010" maxlength="16"></div>
+      <button class="btn primary" id="encApplyBtn">Encode</button>
+      <button class="btn" id="encCompareBtn">🔍 Comparison Mode</button>
+    </div>
+  </div>
+  <div id="encSingleView" class="lab-grid">
+    <div class="card card-pad">
+      <div class="card-title">Encoding Schemes</div>
+      <div class="lab-scheme-list" id="encSchemeList"></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title" id="encActiveTitle">NRZ-L</div>
+      <div class="visual-box" id="encWaveBox" style="min-height:160px;"></div>
+      <div class="info-card" id="encInfoBox"></div>
+    </div>
+  </div>
+  <div id="encCompareView" class="hidden">
+    <div class="card card-pad" style="margin-bottom:16px;">
+      <div class="card-title">Select schemes to compare</div>
+      <div id="encCompareChecks" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    </div>
+    <div class="card card-pad" style="margin-bottom:16px;">
+      <div class="card-title">Waveforms</div>
+      <div id="encCompareWaves"></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title">Comparison Table</div>
+      <div style="overflow-x:auto;"><table class="compare-table" id="encCompareTable"></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== FRAMING LAB =================== -->
+<div id="viewFraming" class="hidden">
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="pill-toggle" id="framingModeToggle" style="width:fit-content; margin-bottom:14px;">
+      <button data-val="byte" class="active">Byte Stuffing</button>
+      <button data-val="bit">Bit Stuffing</button>
+    </div>
+    <div id="byteFramingPanel">
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field" style="flex:2;"><label>Message (use ~ as FLAG, \ as ESC to see stuffing in action)</label><input type="text" id="frameByteInput" value="AB~CD\EF" style="width:100%;"></div>
+        <button class="btn primary" id="frameByteBtn">Stuff &amp; Frame</button>
+      </div>
+    </div>
+    <div id="bitFramingPanel" class="hidden">
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field" style="flex:2;"><label>Bit Stream (try including 11111 to see stuffing)</label><input type="text" id="frameBitInput" value="0111111011111011" style="width:100%;"></div>
+        <button class="btn primary" id="frameBitBtn">Stuff &amp; Frame</button>
+      </div>
+    </div>
+  </div>
+  <div class="card card-pad" id="framingResult"></div>
+</div>
+
+<!-- =================== ERROR DETECTION & CORRECTION =================== -->
+<!-- These two tabs are one educational section split across two pages for
+     space: Error Detection asks "did something break?" and Error Correction
+     (Hamming) asks "where did it break, and can we fix it without asking
+     the sender to resend?" -->
+<div id="errDetCorrFlow" class="card card-pad" style="margin-bottom:16px;">
+  <div class="card-title">Error Detection &amp; Correction</div>
+  <div class="mono muted" style="font-size:12px; line-height:1.7;">
+    Error Detection <b style="color:var(--text)">→</b> find out <i>whether</i> an error exists (Parity, Checksum, CRC — all below can tell you "something's wrong" but not what to fix).
+    <br>Error Correction <b style="color:var(--text)">→</b> find out <i>where</i> the error is and repair it without retransmission (Hamming Code, on the next tab).
+  </div>
+</div>
+
+<div id="viewErrorDetect" class="hidden">
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="pill-toggle" id="errorDetectMethodToggle" style="width:fit-content; margin-bottom:14px;">
+      <button data-val="parity" class="active">Parity Check</button>
+      <button data-val="checksum">Checksum</button>
+      <button data-val="crc">CRC</button>
+    </div>
+
+    <div id="parityPanel">
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field"><label>Data Bits</label><input type="text" id="parityData" value="1011000"></div>
+        <div class="field"><label>Scheme</label>
+          <select id="parityScheme"><option value="even">Even parity</option><option value="odd">Odd parity</option></select>
+        </div>
+        <button class="btn primary" id="parityRunBtn">Generate Parity Bit</button>
+        <button class="btn" id="parityInjectBtn" disabled>⚡ Inject Error</button>
+      </div>
+    </div>
+
+    <div id="checksumPanel" class="hidden">
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field" style="flex:2;"><label>Data Bits</label><input type="text" id="checksumData" value="1101011000100110" style="width:100%;"></div>
+        <div class="field"><label>Block Size</label>
+          <select id="checksumBlockSize"><option value="4">4-bit</option><option value="8" selected>8-bit</option><option value="16">16-bit</option></select>
+        </div>
+        <button class="btn primary" id="checksumRunBtn">Generate Checksum</button>
+        <button class="btn" id="checksumInjectBtn" disabled>⚡ Inject Error</button>
+      </div>
+    </div>
+
+    <div id="crcPanel" class="hidden">
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field"><label>Data Bits</label><input type="text" id="crcData" value="11010011101100"></div>
+        <div class="field"><label>Generator Polynomial</label><input type="text" id="crcGen" value="1011" style="width:120px;"></div>
+        <button class="btn primary" id="crcRunBtn">Generate CRC</button>
+        <button class="btn" id="crcInjectBtn" disabled>⚡ Inject Error</button>
+      </div>
+    </div>
+  </div>
+  <div class="card card-pad" id="parityResult"></div>
+  <div class="card card-pad hidden" id="checksumResult"></div>
+  <div class="card card-pad hidden" id="crcResult"></div>
+  <div class="card card-pad" style="margin-top:16px; text-align:right;">
+    <span class="mono muted" style="font-size:12px;">None of these methods say *where* the error is — that needs a correcting code.</span>
+    <button class="btn primary" onclick="switchTab('errorcorrect')" style="margin-left:12px;">Continue to Error Correction →</button>
+  </div>
+</div>
+
+<!-- =================== ERROR CORRECTION (HAMMING) LAB =================== -->
+<div id="viewErrorCorrect" class="hidden">
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="field-row" style="align-items:flex-end;">
+      <div class="field"><label>4-bit Data (D1 D2 D3 D4)</label><input type="text" id="hamData" value="1011" maxlength="4" style="width:100px;"></div>
+      <button class="btn primary" id="hamEncodeBtn">Encode (Hamming 7,4)</button>
+      <div class="field"><label>Flip bit position (1-7)</label><input type="text" id="hamFlipPos" value="5" maxlength="1" style="width:80px;"></div>
+      <button class="btn" id="hamInjectBtn" disabled>⚡ Inject Error</button>
+      <button class="btn" id="hamCorrectBtn" disabled>🩹 Detect &amp; Correct</button>
+    </div>
+  </div>
+  <div class="card card-pad" id="hamResult"></div>
+</div>
+
+<!-- =================== PERFORMANCE DASHBOARD =================== -->
+<div id="viewDashboard" class="hidden">
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="card-title">Live Session Stats <span class="mono muted" style="font-weight:500; text-transform:none;">(updates after every simulation run in Demo or Builder mode)</span></div>
+    <div class="stat-grid" id="dashStatGrid"></div>
+  </div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;">
+    <div class="card card-pad">
+      <div class="card-title">Reliability Breakdown</div>
+      <div id="dashBars"></div>
+    </div>
+    <div class="card card-pad">
+      <div class="card-title">Recent Runs</div>
+      <div class="log-list" id="dashRunLog" style="max-height:260px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== REPORTS =================== -->
+<div id="viewReports" class="hidden">
+  <div class="card card-pad">
+    <div class="card-title">Lab Report Generator</div>
+    <div class="field-row">
+      <div class="field"><label>Student Name</label><input type="text" id="repName" placeholder="Jane Doe"></div>
+      <div class="field"><label>Student ID</label><input type="text" id="repId" placeholder="2023-CS-041"></div>
+      <div class="field" style="flex:2"><label>Experiment Title</label><input type="text" id="repTitle" value="OSI &amp; TCP/IP Packet-Level Simulation" style="width:100%;"></div>
+    </div>
+    <div class="field" style="margin-bottom:12px;"><label>Observations</label><textarea id="repObs" rows="4" placeholder="What did you observe during the simulation?"></textarea></div>
+    <button class="btn primary" id="repGenBtn">📄 Generate &amp; Print Report</button>
+    <span class="muted" style="font-size:12px; margin-left:10px;">Pulls the activity log from your most recent Demo or Builder run.</span>
+  </div>
+</div>
+
+<!-- =================== HELP =================== -->
+<div id="viewHelp" class="hidden">
+  <div class="card card-pad">
+    <div class="card-title">Guide</div>
+    <div class="help-item"><h4>🧪 Demo Simulation</h4><p>A fixed PC↔Switch↔Router×3↔PC network. Configure the message and protocols, hit Send, then use Play/Step/Replay to walk through every layer.</p></div>
+    <div class="help-item"><h4>🗺️ Topology Builder</h4><p>Drag devices from the palette onto the canvas, or click a template to insert one (templates stack — they don't replace what's already there). Use Connect Mode to wire devices, then set a Sender and Receiver and press Start Simulation.</p></div>
+    <div class="help-item"><h4>📶 Line Encoding Lab</h4><p>Pick any scheme to see its waveform and theory, or switch to Comparison Mode to see several schemes side by side against the same bit stream.</p></div>
+    <div class="help-item"><h4>🧩 Framing Lab</h4><p>Byte stuffing escapes FLAG/ESC bytes inside your message; bit stuffing inserts a 0 after every five consecutive 1s so the 01111110 flag pattern never appears inside data.</p></div>
+    <div class="help-item"><h4>🛡️ Error Detection</h4><p>Enter data bits and a generator polynomial to see the CRC computed via binary (XOR) division, then inject a transmission error and watch the check fail.</p></div>
+    <div class="help-item"><h4>🩹 Error Correction</h4><p>Hamming(7,4) encodes 4 data bits with 3 parity bits. Flip any one bit and the syndrome calculation will locate and auto-correct it.</p></div>
+    <div class="help-item"><h4>📊 Performance Dashboard</h4><p>Every run in Demo or Builder mode updates these live counters — packets sent/delivered/dropped, retransmissions, and success rate.</p></div>
+    <div class="help-item"><h4>📄 Reports</h4><p>Fill in your details and generate a print-ready lab report that includes the log from your last simulation — use your browser's "Save as PDF" option in the print dialog.</p></div>
+  </div>
+</div>
+
+<footer>SEG · ACK · SYN · ARP · CRC — every layer, animated, nothing invisible.</footer>
+</div>
+
+<script src="src/js/config.js"></script>
+<script src="src/js/utils.js"></script>
+<script src="src/js/encoding.js"></script>
+<script src="src/js/framing.js"></script>
+<script src="src/js/crc.js"></script>
+<script src="src/js/hamming.js"></script>
+<script src="src/js/errorcontrol.js"></script>
+<script src="src/js/simulation.js"></script>
+<script src="src/js/topology.js"></script>
+<script src="src/js/dashboard.js"></script>
+<script src="src/js/reports.js"></script>
+<script src="src/js/minimap.js"></script>
+<script src="src/js/app.js"></script>
+<script src="src/js/main.js"></script>
+</body>
+</html>
